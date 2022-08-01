@@ -48,38 +48,70 @@ def GetScore(strEvent, varInput, strAgeGroup):
     dbConn.row_factory = sqlite3.Row
     c = dbConn.cursor()
 
-    if strEvent == "SDC" or strEvent == "PLK" or strEvent == "TMR":
+    if strEvent in ("SDC", "PLK", "TMR", "TMW", "OKS", "FKR", "TKB"):
         if varInput[2] != ":":
             varInput = "0" + varInput
 
-    # Build the query
-    strSQL = "SELECT Points FROM tbl" + strEvent
-    strSQL += " WHERE ([" + strAgeGroup + "] "
-    # Set correct stack order
-    if strEvent == "SDC" or strEvent == "TMR":
-        strSQL += ">= ?"
+        if strEvent == "TMW":
+            strAE = "Walk"
+        elif strEvent == "OKS":
+            strAE = "Swim"
+        elif strEvent == "FKR":
+            strAE = "Row"
+        elif strEvent == "TKB":
+            strAE = "Bike"
+
+    # Get Go/No-Go for alternate events
+    if strEvent in ("TMW", "OKS", "FKR", "TKB"):
+        strSQL = "SELECT [" + strAgeGroup + "] FROM tblAE"
+        strSQL += " WHERE Event = '" + strAE + "'"
+        results = c.execute(strSQL).fetchone()
+        strOutput = results[0]
+        c.close()
+        if strTimeToSeconds(strOutput) >= strTimeToSeconds(varInput):
+            intOutput = 60
+        else:
+            intOutput = 0
     else:
-        strSQL += "<= ?"
-    strSQL += " AND NOT [" + strAgeGroup + "] = '')"
-    # Execute query
-    results = c.execute(strSQL, (varInput,)).fetchone()
-    intOutput = int(results[0])
-    c.close()
+        # Build the query
+        strSQL = "SELECT Points FROM tbl" + strEvent
+        strSQL += " WHERE ([" + strAgeGroup + "] "
+        # Set correct stack order
+        if strEvent == "SDC" or strEvent == "TMR":
+            strSQL += ">= ?"
+        else:
+            strSQL += "<= ?"
+        strSQL += " AND NOT [" + strAgeGroup + "] = '')"
+        # Execute query
+        results = c.execute(strSQL, (varInput,)).fetchone()
+        intOutput = int(results[0])
+        c.close()
     return intOutput
 
 
-def CalcACFT(intAge, strGender, intMDL, dblSPT, intHRP, strSDC, strPLK, strTMR):
+def CalcACFT(
+    intAge, strGender, intMDL, dblSPT, intHRP, strSDC, strPLK, cardio, strCardio
+):
     # Calculate ACFT score
     # Find the age group and gender
     strAgeGroup = GetAgeGroup(intAge, strGender)
-    strEvents = ["MDL", "SPT", "HRP", "SDC", "PLK", "TMR"]
     # Get event scores
     intMDLScore = GetScore("MDL", intMDL, strAgeGroup)
     intSPTScore = GetScore("SPT", dblSPT, strAgeGroup)
     intHRPScore = GetScore("HRP", intHRP, strAgeGroup)
     intSDCScore = GetScore("SDC", strSDC, strAgeGroup)
     intPLKScore = GetScore("PLK", strPLK, strAgeGroup)
-    intTMRScore = GetScore("TMR", strTMR, strAgeGroup)
+    if strCardio == "TMR":
+        intCardioScore = GetScore("TMR", cardio, strAgeGroup)
+    elif strCardio == "TMW":
+        intCardioScore = GetScore("TMW", cardio, strAgeGroup)
+    elif strCardio == "OKS":
+        intCardioScore = GetScore("OKS", cardio, strAgeGroup)
+    elif strCardio == "FKR":
+        intCardioScore = GetScore("FKR", cardio, strAgeGroup)
+    elif strCardio == "TKB":
+        intCardioScore = GetScore("TKB", cardio, strAgeGroup)
+
     # Store scores in list
     strScores = [
         intMDLScore,
@@ -87,7 +119,7 @@ def CalcACFT(intAge, strGender, intMDL, dblSPT, intHRP, strSDC, strPLK, strTMR):
         intHRPScore,
         intSDCScore,
         intPLKScore,
-        intTMRScore,
+        intCardioScore,
     ]
     # Calculate the total score
     intTotal = (
@@ -96,7 +128,7 @@ def CalcACFT(intAge, strGender, intMDL, dblSPT, intHRP, strSDC, strPLK, strTMR):
         + intHRPScore
         + intSDCScore
         + intPLKScore
-        + intTMRScore
+        + intCardioScore
     )
 
     # Determine if all events are passed
@@ -117,8 +149,21 @@ def GetMinScore(strEvent, varInput, strAgeGroup):
     dbConn = sqlite3.connect(strPath)
     dbConn.row_factory = sqlite3.Row
     c = dbConn.cursor()
-    strSQL = "SELECT [" + strAgeGroup + "] FROM tbl" + strEvent
-    strSQL += " WHERE Points = " + varInput
+    if strEvent not in ("TMW", "OKS", "FKR", "TKB"):
+        strSQL = "SELECT [" + strAgeGroup + "] FROM tbl" + strEvent
+        strSQL += " WHERE Points = " + varInput
+    else:
+        # Alternate events
+        if strEvent == "TMW":
+            strAE = "Walk"
+        elif strEvent == "OKS":
+            strAE = "Swim"
+        elif strEvent == "FKR":
+            strAE = "Row"
+        elif strEvent == "TKB":
+            strAE = "Bike"
+        strSQL = "SELECT [" + strAgeGroup + "] FROM tblAE"
+        strSQL += " WHERE Event = '" + strAE + "'"
     results = c.execute(strSQL).fetchone()
     strOutput = results[0]
     c.close()
@@ -148,7 +193,7 @@ def ACFTvalidate(values):
     except:
         strInvalidValues.append("SPT")
         isValid = False
-    checkTime = ["SDC", "PLK", "TMR"]
+    checkTime = ["SDC", "PLK", "Cardio"]
     for item in checkTime:
         try:
             strTimeToSeconds(values[item])
@@ -228,9 +273,16 @@ def MainWindow():
             sg.Text(key="PLKout"),
         ],
         [
-            sg.Text("TMR:"),
-            sg.InputText("22:00", key="TMR", size=(5, 1)),
-            sg.Text(key="TMRout"),
+            sg.Text("Cardio:"),
+            sg.InputText("22:00", key="Cardio", size=(5, 1)),
+            sg.Text(key="CardioOut"),
+        ],
+        [
+            sg.Radio("2-mi Run", "Cardio", key="TMR", default=True),
+            sg.Radio("2.5-mi Walk", "Cardio", key="TMW"),
+            sg.Radio("1km Swim", "Cardio", key="OKS"),
+            sg.Radio("5km Row", "Cardio", key="FKR"),
+            sg.Radio("12km Bike", "Cardio", key="TKB"),
         ],
         [sg.Text("")],
         [
@@ -277,10 +329,22 @@ def MainWindow():
             hrp = int(values["HRP"])
             sdc = values["SDC"]
             plk = values["PLK"]
-            tmr = values["TMR"]
+            cardio = values["Cardio"]
+            if values["TMR"]:
+                cardioEvent = "TMR"
+            elif values["TMW"]:
+                cardioEvent = "TMW"
+            elif values["OKS"]:
+                cardioEvent = "OKS"
+            elif values["FKR"]:
+                cardioEvent = "FKR"
+            elif values["TKB"]:
+                cardioEvent = "TKB"
 
             # Execute the query
-            results = CalcACFT(age, gender, mdl, spt, hrp, sdc, plk, tmr)
+            results = CalcACFT(
+                age, gender, mdl, spt, hrp, sdc, plk, cardio, cardioEvent
+            )
 
             # Show results on the window
             window["MDLout"].update(value=str(results[0]) + " Points")
@@ -288,7 +352,7 @@ def MainWindow():
             window["HRPout"].update(value=str(results[2]) + " Points")
             window["SDCout"].update(value=str(results[3]) + " Points")
             window["PLKout"].update(value=str(results[4]) + " Points")
-            window["TMRout"].update(value=str(results[5]) + " Points")
+            window["CardioOut"].update(value=str(results[5]) + " Points")
             window["PF"].update(value=str(results[7]))
             window["TotalScore"].update(value="Total Score: " + str(results[6]))
 
@@ -305,13 +369,20 @@ def FindMinimumsWindow():
             sg.Radio("Female", "Gender"),
         ],
         [sg.Text("Event Score: "), sg.InputText("60", key="EventScore", size=(10, 1))],
+        [
+            sg.Radio("2-mi Run", "Cardio", key="TMR", default=True),
+            sg.Radio("2.5-mi Walk", "Cardio", key="TMW"),
+            sg.Radio("1km Swim", "Cardio", key="OKS"),
+            sg.Radio("5km Row", "Cardio", key="FKR"),
+            sg.Radio("12km Bike", "Cardio", key="TKB"),
+        ],
         [sg.Text("")],
         [sg.Text("", key="MDL")],
         [sg.Text("", key="SPT")],
         [sg.Text("", key="HRP")],
         [sg.Text("", key="SDC")],
         [sg.Text("", key="PLK")],
-        [sg.Text("", key="TMR")],
+        [sg.Text("", key="CardioOut")],
         [sg.Text("")],
         [
             sg.Submit("Show Minimums", button_color=("black", "#229954")),
@@ -361,9 +432,31 @@ def FindMinimumsWindow():
             window["PLK"].update(
                 value="PLK: " + str(GetMinScore("PLK", values["EventScore"], AgeGroup))
             )
-            window["TMR"].update(
-                value="TMR: " + str(GetMinScore("TMR", values["EventScore"], AgeGroup))
-            )
+            if values["TMR"]:
+                window["CardioOut"].update(
+                    value="TMR: "
+                    + str(GetMinScore("TMR", values["EventScore"], AgeGroup))
+                )
+            elif values["TMW"]:
+                window["CardioOut"].update(
+                    value="TMW: "
+                    + str(GetMinScore("TMW", values["EventScore"], AgeGroup))
+                )
+            elif values["OKS"]:
+                window["CardioOut"].update(
+                    value="OKS: "
+                    + str(GetMinScore("OKS", values["EventScore"], AgeGroup))
+                )
+            elif values["FKR"]:
+                window["CardioOut"].update(
+                    value="FKR: "
+                    + str(GetMinScore("FKR", values["EventScore"], AgeGroup))
+                )
+            elif values["TKB"]:
+                window["CardioOut"].update(
+                    value="TKB: "
+                    + str(GetMinScore("TKB", values["EventScore"], AgeGroup))
+                )
 
     window.close()
 
