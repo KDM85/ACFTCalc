@@ -33,6 +33,14 @@ def GetAgeGroup(intAge, strGender):
     return strAgeGroup + strGender
 
 
+def strTimeToSeconds(strTime):
+    strSplit = strTime.split(":")
+    intMin = int(strSplit[0])
+    intSec = int(strSplit[1])
+    intTime = intMin * 60 + intSec
+    return intTime
+
+
 def GetScore(strEvent, varInput, strAgeGroup):
     # Connect to the database
     strPath = os.getcwd() + "/ACFT Calculator/ACFTcalc.db"
@@ -58,31 +66,6 @@ def GetScore(strEvent, varInput, strAgeGroup):
     intOutput = int(results[0])
     c.close()
     return intOutput
-
-
-def StrTimeToSeconds(strTime):
-    # Convert mm:ss string to integer seconds
-    # Handle null
-    if len(strTime) == 0 or strTime is None:
-        return 0
-        quit()
-    # Find the colon in the string
-    intColonLoc = strTime.find(":")
-    intMinutes = int(strTime[:intColonLoc])
-    intSeconds = int(strTime[-2 : len(strTime)])
-    # Return total seconds
-    return intSeconds + (intMinutes * 60)
-
-
-def SecondsToStrTime(intTime):
-    # Convert integer seconds to mm:ss string
-    intMinutes = int(intTime / 60)
-    strMinutes = str(intMinutes).format("00")
-    intSeconds = intTime - (intMinutes * 60)
-    strSeconds = str(intSeconds).format("00")
-    # Build string
-    strOutput = strMinutes + ":" + strSeconds
-    return strOutput
 
 
 def CalcACFT(intAge, strGender, intMDL, dblSPT, intHRP, strSDC, strPLK, strTMR):
@@ -149,30 +132,55 @@ def GetMinScore(strEvent, varInput, strAgeGroup):
 # ----------------------------------------------------------------
 
 
-def validInt(varInput):
-    # Check if input is an integer
+def ACFTvalidate(values):
+    isValid = True
+    strInvalidValues = []
+
+    checkInt = ["Age", "MDL", "HRP"]
+    for item in checkInt:
+        try:
+            int(values[item])
+        except:
+            strInvalidValues.append(item)
+            isValid = False
     try:
-        int(varInput)
-        return True
-    except ValueError:
-        return False
+        float(values["SPT"])
+    except:
+        strInvalidValues.append("SPT")
+        isValid = False
+    checkTime = ["SDC", "PLK", "TMR"]
+    for item in checkTime:
+        try:
+            strTimeToSeconds(values[item])
+        except:
+            strInvalidValues.append(item)
+            isValid = False
+
+    result = [isValid, strInvalidValues]
+
+    return result
 
 
-def validFloat(varInput):
-    # Check if input is a float
-    try:
-        float(varInput)
-        return True
-    except ValueError:
-        return False
+def MINvalidate(values):
+    isValid = True
+    strInvalidValues = []
+    for item in ("Age", "EventScore"):
+        try:
+            int(values[item])
+        except:
+            strInvalidValues.append(item)
+            isValid = False
+
+    result = [isValid, strInvalidValues]
+
+    return result
 
 
-def validTime(varInput):
-    # Check if input is a time
-    if StrTimeToSeconds(varInput) > 0:
-        return True
-    else:
-        return False
+def GetErrorMessage(strInvalidValues):
+    strMessage = ""
+    for value in strInvalidValues:
+        strMessage += "\nInvalid " + value
+    return strMessage
 
 
 # ----------------------------------------------------------------
@@ -188,7 +196,7 @@ sg.theme("DarkGrey15")
 def MainWindow():
     # Design the Score Lookup Layout
     layout = [
-        [sg.Text("Age:"), sg.InputText("22", key="Age", size=(10, 1))],
+        [sg.Text("Age:"), sg.InputText("22", key="Age", size=(2, 1))],
         [
             sg.Text("Gender:"),
             sg.Radio("Male", "Gender", key="Gender", default=True),
@@ -196,40 +204,40 @@ def MainWindow():
         ],
         [
             sg.Text("MDL:"),
-            sg.InputText("140", key="MDL", size=(10, 1)),
-            sg.Text(size=(10, 1), key="MDLout"),
+            sg.InputText("140", key="MDL", size=(5, 1)),
+            sg.Text(key="MDLout"),
         ],
         [
             sg.Text("SPT:"),
-            sg.InputText("7.8", key="SPT", size=(10, 1)),
-            sg.Text(size=(10, 1), key="SPTout"),
+            sg.InputText("6.3", key="SPT", size=(5, 1)),
+            sg.Text(key="SPTout"),
         ],
         [
             sg.Text("HRP:"),
-            sg.InputText("10", key="HRP", size=(10, 1)),
-            sg.Text(size=(10, 1), key="HRPout"),
+            sg.InputText("10", key="HRP", size=(5, 1)),
+            sg.Text(key="HRPout"),
         ],
         [
             sg.Text("SDC:"),
-            sg.InputText("2:31", key="SDC", size=(10, 1)),
-            sg.Text(size=(10, 1), key="SDCout"),
+            sg.InputText("2:31", key="SDC", size=(5, 1)),
+            sg.Text(key="SDCout"),
         ],
         [
             sg.Text("PLK:"),
-            sg.InputText("1:31", key="PLK", size=(10, 1)),
-            sg.Text(size=(10, 1), key="PLKout"),
+            sg.InputText("1:25", key="PLK", size=(5, 1)),
+            sg.Text(key="PLKout"),
         ],
         [
             sg.Text("TMR:"),
-            sg.InputText("19:31", key="TMR", size=(10, 1)),
-            sg.Text(size=(10, 1), key="TMRout"),
+            sg.InputText("22:00", key="TMR", size=(5, 1)),
+            sg.Text(key="TMRout"),
         ],
         [sg.Text("")],
         [
-            sg.Text("", key="PF", size=(10, 1)),
+            sg.Text("", key="PF", size=(4, 1)),
         ],
         [
-            sg.Text("", key="TotalScore", size=(15, 1)),
+            sg.Text("", key="TotalScore", size=(16, 1)),
         ],
         [
             sg.Submit("Calculate", button_color=("black", "#229954")),
@@ -241,53 +249,48 @@ def MainWindow():
     ]
 
     # Show the window
-    window = sg.Window("ACFT Calculator", layout)
+    window = sg.Window("ACFT Calculator", layout, element_justification="c")
 
     while True:
         event, values = window.read()
 
-        # Validate values
         if event in (sg.WIN_CLOSED, "Quit"):
             break
         elif event == "FindReq":
             window.close()
             FindMinimumsWindow()
-        checkInt = ["Age", "MDL", "HRP"]
-        for item in checkInt:
-            if not validInt(values[item]):
-                window[item].update(value="")
-        if not validFloat(values["SPT"]):
-            window["SPT"].update(value="")
-        checkTime = ["SDC", "PLK", "TMR"]
-        for item in checkTime:
-            if not validTime(values[item]):
-                window[item].update(value="")
 
-        # Prepare the query
-        age = int(values["Age"])
-        if values["Gender"]:
-            gender = "M"
+        # Validate values
+        validationResult = ACFTvalidate(values)
+        if not validationResult[0]:
+            strErrorMessage = GetErrorMessage(validationResult[1])
+            sg.popup(strErrorMessage)
         else:
-            gender = "F"
-        mdl = int(values["MDL"])
-        spt = float(values["SPT"])
-        hrp = int(values["HRP"])
-        sdc = values["SDC"]
-        plk = values["PLK"]
-        tmr = values["TMR"]
+            # Prepare the query
+            age = int(values["Age"])
+            if values["Gender"]:
+                gender = "M"
+            else:
+                gender = "F"
+            mdl = int(values["MDL"])
+            spt = float(values["SPT"])
+            hrp = int(values["HRP"])
+            sdc = values["SDC"]
+            plk = values["PLK"]
+            tmr = values["TMR"]
 
-        # Execute the query
-        results = CalcACFT(age, gender, mdl, spt, hrp, sdc, plk, tmr)
+            # Execute the query
+            results = CalcACFT(age, gender, mdl, spt, hrp, sdc, plk, tmr)
 
-        # Show results on the window
-        window["MDLout"].update(value=str(results[0]) + " Points")
-        window["SPTout"].update(value=str(results[1]) + " Points")
-        window["HRPout"].update(value=str(results[2]) + " Points")
-        window["SDCout"].update(value=str(results[3]) + " Points")
-        window["PLKout"].update(value=str(results[4]) + " Points")
-        window["TMRout"].update(value=str(results[5]) + " Points")
-        window["PF"].update(value=str(results[7]))
-        window["TotalScore"].update(value="Total Score: " + str(results[6]))
+            # Show results on the window
+            window["MDLout"].update(value=str(results[0]) + " Points")
+            window["SPTout"].update(value=str(results[1]) + " Points")
+            window["HRPout"].update(value=str(results[2]) + " Points")
+            window["SDCout"].update(value=str(results[3]) + " Points")
+            window["PLKout"].update(value=str(results[4]) + " Points")
+            window["TMRout"].update(value=str(results[5]) + " Points")
+            window["PF"].update(value=str(results[7]))
+            window["TotalScore"].update(value="Total Score: " + str(results[6]))
 
     window.close()
 
@@ -303,12 +306,12 @@ def FindMinimumsWindow():
         ],
         [sg.Text("Event Score: "), sg.InputText("60", key="EventScore", size=(10, 1))],
         [sg.Text("")],
-        [sg.Text("", key="MDL", size=(10, 1))],
-        [sg.Text("", key="SPT", size=(10, 1))],
-        [sg.Text("", key="HRP", size=(10, 1))],
-        [sg.Text("", key="SDC", size=(10, 1))],
-        [sg.Text("", key="PLK", size=(10, 1))],
-        [sg.Text("", key="TMR", size=(10, 1))],
+        [sg.Text("", key="MDL")],
+        [sg.Text("", key="SPT")],
+        [sg.Text("", key="HRP")],
+        [sg.Text("", key="SDC")],
+        [sg.Text("", key="PLK")],
+        [sg.Text("", key="TMR")],
         [sg.Text("")],
         [
             sg.Submit("Show Minimums", button_color=("black", "#229954")),
@@ -320,7 +323,7 @@ def FindMinimumsWindow():
     ]
 
     # Show the window
-    window = sg.Window("Show Event Minimums", layout)
+    window = sg.Window("Show Event Minimums", layout, element_justification="c")
 
     while True:
         event, values = window.read()
@@ -329,31 +332,38 @@ def FindMinimumsWindow():
         elif event == "ScoreCalc":
             window.close()
             MainWindow()
-        # Prepare the query
-        if values["Gender"]:
-            gender = "M"
+
+        # Validate values
+        validationResult = MINvalidate(values)
+        if not validationResult[0]:
+            strErrorMessage = GetErrorMessage(validationResult[1])
+            sg.popup(strErrorMessage)
         else:
-            gender = "F"
-        AgeGroup = GetAgeGroup(int(values["Age"]), gender)
-        # Update the window
-        window["MDL"].update(
-            value="MDL: " + str(GetMinScore("MDL", values["EventScore"], AgeGroup))
-        )
-        window["SPT"].update(
-            value="SPT: " + str(GetMinScore("SPT", values["EventScore"], AgeGroup))
-        )
-        window["HRP"].update(
-            value="HRP: " + str(GetMinScore("HRP", values["EventScore"], AgeGroup))
-        )
-        window["SDC"].update(
-            value="SDC: " + str(GetMinScore("SDC", values["EventScore"], AgeGroup))
-        )
-        window["PLK"].update(
-            value="PLK: " + str(GetMinScore("PLK", values["EventScore"], AgeGroup))
-        )
-        window["TMR"].update(
-            value="TMR: " + str(GetMinScore("TMR", values["EventScore"], AgeGroup))
-        )
+            # Prepare the query
+            if values["Gender"]:
+                gender = "M"
+            else:
+                gender = "F"
+            AgeGroup = GetAgeGroup(int(values["Age"]), gender)
+            # Update the window
+            window["MDL"].update(
+                value="MDL: " + str(GetMinScore("MDL", values["EventScore"], AgeGroup))
+            )
+            window["SPT"].update(
+                value="SPT: " + str(GetMinScore("SPT", values["EventScore"], AgeGroup))
+            )
+            window["HRP"].update(
+                value="HRP: " + str(GetMinScore("HRP", values["EventScore"], AgeGroup))
+            )
+            window["SDC"].update(
+                value="SDC: " + str(GetMinScore("SDC", values["EventScore"], AgeGroup))
+            )
+            window["PLK"].update(
+                value="PLK: " + str(GetMinScore("PLK", values["EventScore"], AgeGroup))
+            )
+            window["TMR"].update(
+                value="TMR: " + str(GetMinScore("TMR", values["EventScore"], AgeGroup))
+            )
 
     window.close()
 
