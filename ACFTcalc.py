@@ -149,23 +149,31 @@ def GetMinScore(strEvent, varInput, strAgeGroup):
     dbConn = sqlite3.connect(strPath)
     dbConn.row_factory = sqlite3.Row
     c = dbConn.cursor()
-    if strEvent not in ("TMW", "OKS", "FKR", "TKB"):
-        strSQL = "SELECT [" + strAgeGroup + "] FROM tbl" + strEvent
-        strSQL += " WHERE Points = " + varInput
-    else:
-        # Alternate events
-        if strEvent == "TMW":
-            strAE = "Walk"
-        elif strEvent == "OKS":
-            strAE = "Swim"
-        elif strEvent == "FKR":
-            strAE = "Row"
-        elif strEvent == "TKB":
-            strAE = "Bike"
-        strSQL = "SELECT [" + strAgeGroup + "] FROM tblAE"
-        strSQL += " WHERE Event = '" + strAE + "'"
-    results = c.execute(strSQL).fetchone()
-    strOutput = results[0]
+    strOutput = ""
+    i = 0
+    while strOutput == "":
+        varInput = int(varInput) + i
+        if strEvent not in ("TMW", "OKS", "FKR", "TKB"):
+            strSQL = "SELECT [" + strAgeGroup + "] FROM tbl" + strEvent
+            strSQL += " WHERE Points = " + str(varInput)
+        else:
+            # Alternate events
+            if strEvent == "TMW":
+                strAE = "Walk"
+            elif strEvent == "OKS":
+                strAE = "Swim"
+            elif strEvent == "FKR":
+                strAE = "Row"
+            elif strEvent == "TKB":
+                strAE = "Bike"
+            strSQL = "SELECT [" + strAgeGroup + "] FROM tblAE"
+            strSQL += " WHERE Event = '" + strAE + "'"
+        results = c.execute(strSQL).fetchone()
+        if results is None:
+            strOutput = ""
+        else:
+            strOutput = results[0]
+        i += 1
     c.close()
     return strOutput
 
