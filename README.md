@@ -1,5 +1,5 @@
 # ACFTCalc
-Army Combat Fitness Test Score Calculator (Python)
+Army Combat Fitness Test (ACFT 3.0) Score Calculator (Python)
 
 Requirements: PysimpleGUI, Sqlite3, os
 
